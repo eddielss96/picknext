@@ -1,0 +1,100 @@
+{
+  "meta": {
+    "title": "範例座位表（開學第一週）",
+    "note": "這是範例資料，正式上課前請用「上傳座位表圖片」重新辨識並校正，或直接於下方表格手動編輯。"
+  },
+  "sessions": [
+    {
+      "id": "left",
+      "label": "左側",
+      "rows": [
+        [
+          { "name": "TA", "exclude": true },
+          null,
+          { "name": "謝承真", "gender": "" },
+          { "name": "宋宥儀", "gender": "" },
+          { "name": "林家妤", "gender": "" },
+          { "name": "王富禾", "gender": "" },
+          { "name": "李淳仕", "gender": "" }
+        ],
+        [
+          { "name": "李奕萱", "gender": "" },
+          { "name": "楊子賢", "gender": "" },
+          { "name": "王宥思", "gender": "" },
+          { "name": "李柏賢", "gender": "" },
+          { "name": "賴煒翔", "gender": "" },
+          { "name": "林思芸", "gender": "" }
+        ],
+        [
+          { "name": "李若喬", "gender": "" },
+          { "name": "莊易倫", "gender": "" },
+          { "name": "蔡昕彤", "gender": "" },
+          { "name": "羅沛璿", "gender": "" }
+        ],
+        [
+          { "name": "趙若澄", "gender": "" },
+          { "name": "郭庭媽", "gender": "" }
+        ]
+      ]
+    },
+    {
+      "id": "middle",
+      "label": "中間",
+      "rows": [
+        [
+          { "name": "許愷恆", "gender": "" },
+          { "name": "汪俊廷", "gender": "" }
+        ],
+        [
+          { "name": "許可臻", "gender": "" },
+          { "name": "林芝涵", "gender": "" },
+          { "name": "白成君", "gender": "" },
+          { "name": "李敏華", "gender": "" },
+          { "name": "蔡以恩", "gender": "" },
+          { "name": "游宜澄", "gender": "" },
+          { "name": "黃晉樂", "gender": "" },
+          { "name": "汪泓易", "gender": "" }
+        ],
+        [
+          { "name": "周勁旺", "gender": "" },
+          { "name": "李薇欣", "gender": "" },
+          { "name": "張榕茜", "gender": "" },
+          { "name": "林芝涵", "gender": "" },
+          { "name": "林柏翰", "gender": "" },
+          { "name": "高定驤", "gender": "" }
+        ],
+        [
+          { "name": "楊婷云", "gender": "" },
+          { "name": "蔡定翰", "gender": "" },
+          { "name": "廖禹青", "gender": "" },
+          { "name": "許書函", "gender": "" }
+        ]
+      ]
+    },
+    {
+      "id": "right",
+      "label": "右側",
+      "rows": [
+        [],
+        [
+          { "name": "林欣學", "gender": "" },
+          { "name": "黃宥程", "gender": "" },
+          { "name": "張宇佑", "gender": "" },
+          { "name": "林宥妤", "gender": "" },
+          { "name": "巫侑寧", "gender": "" },
+          { "name": "黃獻儀", "gender": "" }
+        ],
+        [
+          { "name": "李蘇容", "gender": "" },
+          { "name": "吳英綺", "gender": "" },
+          { "name": "柯絮甯", "gender": "" },
+          { "name": "鄭凱云", "gender": "" }
+        ],
+        [
+          { "name": "范予綸", "gender": "" },
+          { "name": "李偉揚", "gender": "" }
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PickNext 點名小幫手</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>🎯 PickNext 點名小幫手</h1>
+    <p class="subtitle">上課點名輔助工具：自動推薦「不繞同一區、不連同性別、不重複」的下一位</p>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="setup">1. 座位表設定</button>
+    <button class="tab-btn" data-tab="rollcall">2. 點名</button>
+    <button class="tab-btn" data-tab="settings">3. 設定 / 備份</button>
+  </nav>
+
+  <main>
+    <!-- ============ Step 1：座位表設定 ============ -->
+    <section id="tab-setup" class="tab-panel active">
+      <div class="card">
+        <h2>上傳座位表圖片</h2>
+        <p class="hint">上傳照片後可自動辨識姓名（僅供輔助，辨識率有限，請務必於下方逐一校正）。性別欄位需要手動設定，圖片顏色不會被拿來判斷性別。</p>
+        <div class="upload-row">
+          <input type="file" id="imageInput" accept="image/*" />
+          <button id="btnRecognize" class="btn" disabled>開始自動辨識</button>
+          <button id="btnLoadSample" class="btn btn-secondary">套用範例資料</button>
+        </div>
+        <p id="ocrEngineStatus" class="hint">OCR 引擎載入中…</p>
+        <div id="ocrProgress" class="ocr-progress" hidden>
+          <div class="progress-bar"><div id="ocrProgressFill" class="progress-fill"></div></div>
+          <span id="ocrProgressText"></span>
+        </div>
+        <div class="preview-row">
+          <img id="imagePreview" hidden alt="座位表預覽" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="seat-editor-header">
+          <h2>座位表校正</h2>
+          <button id="btnAddSession" class="btn btn-secondary btn-small">＋ 新增區塊</button>
+        </div>
+        <p class="hint">每一個區塊（Session）代表圖片中一個倒三角形座位區。規則1（不能同區連續點名）就是以這裡的區塊分類為準，請確認分區正確。</p>
+        <div id="sessionEditors"></div>
+        <div class="setup-actions">
+          <button id="btnSaveSeating" class="btn btn-primary">儲存座位表並前往點名</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Step 2：點名 ============ -->
+    <section id="tab-rollcall" class="tab-panel">
+      <div class="rollcall-topbar">
+        <span class="me-badge">🙋 我是：<strong id="meNameDisplay"></strong></span>
+        <div class="topbar-actions">
+          <button id="btnUndo" class="btn btn-secondary btn-small">↩️ 復原上一步</button>
+          <button id="btnClearLog" class="btn btn-danger btn-small">🗑️ 清除點名記錄</button>
+        </div>
+      </div>
+
+      <div class="card recommend-card" id="recommendCard">
+        <!-- 由 app.js 動態渲染 -->
+      </div>
+
+      <div class="card">
+        <h2>座位表（點擊座位＝記錄此人被點到）</h2>
+        <div id="seatingChart" class="seating-chart"></div>
+      </div>
+
+      <div class="card">
+        <h2>點名記錄</h2>
+        <ol id="callHistory" class="call-history"></ol>
+      </div>
+    </section>
+
+    <!-- ============ Step 3：設定 / 備份 ============ -->
+    <section id="tab-settings" class="tab-panel">
+      <div class="card">
+        <h2>我的身份</h2>
+        <label class="field">
+          我的姓名（用來在座位表上標示「我」）
+          <input type="text" id="meNameInput" placeholder="例如：林欣學" />
+        </label>
+      </div>
+
+      <div class="card">
+        <h2>資料備份</h2>
+        <p class="hint">所有資料只存在這台瀏覽器（localStorage）。建議上課前後都匯出一份 JSON 備份，換裝置或清除瀏覽器資料前也請先匯出。</p>
+        <div class="backup-row">
+          <button id="btnExport" class="btn btn-secondary">匯出 JSON</button>
+          <label class="btn btn-secondary file-btn">
+            匯入 JSON
+            <input type="file" id="importInput" accept="application/json" hidden />
+          </label>
+          <button id="btnResetAll" class="btn btn-danger">清除所有資料</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>點人規則</h2>
+        <ol class="rules-list">
+          <li>同一個座位表區塊（session）不能連續點兩次，點完一人後下一位要換到別的區塊。</li>
+          <li>不能連續點同一性別，下一位性別需與剛剛回答完的人不同。</li>
+          <li>已經被點過的人不能再被點第二次。</li>
+          <li>點名者必須在 3 秒內決定下一位——本工具會直接給建議人選＋注音，方便快速唸出。</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>資料僅儲存於本機瀏覽器，不會上傳到任何伺服器。</p>
+  </footer>
+
+  <!-- 姓名轉注音：pinyin-pro（UMD，掛在 window.pinyinPro，隨網站一起發布，不需要網路） -->
+  <script src="js/vendor/pinyin-pro.js"></script>
+
+  <!-- 座位表圖片 OCR：Tesseract.js（只有「設定座位表」步驟需要網路，點名當下完全不需要連網）
+       CDN 有時不穩，失敗時自動改用備援 CDN 重試一次 -->
+  <script>
+    (function loadTesseract(urls) {
+      if (!urls.length) {
+        window.__tesseractLoadFailed = true;
+        window.dispatchEvent(new Event("tesseract-load-failed"));
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = urls[0];
+      s.onload = () => window.dispatchEvent(new Event("tesseract-ready"));
+      s.onerror = () => loadTesseract(urls.slice(1));
+      document.head.appendChild(s);
+    })([
+      "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+      "https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js",
+    ]);
+  </script>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
