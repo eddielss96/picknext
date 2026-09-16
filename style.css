@@ -30,6 +30,8 @@
     --called-bg: #2b2d31;
     --candidate-bg: #103826;
     --unsure-bg: #3a2f10;
+    --success-bg: #103826;
+    --warn-bg: #3a2f10;
   }
 }
 
