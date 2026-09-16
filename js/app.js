@@ -16,18 +16,34 @@ function cloneSeating(seating) {
 
 // ---------------- 初始化 ----------------
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   wireTabs();
   wireSetupTab();
   wireRollcallTab();
   wireSettingsTab();
   wireOcrEngineStatus();
+
+  await ensureDefaultRoster();
   wireRosterUI();
 
   renderSeatEditor();
   renderSettings();
   renderRollcall();
 });
+
+// 內建預設名冊：全新瀏覽器（localStorage 還沒有名冊資料時）自動帶入班級固定名單，
+// 不用每次都手動貼一次。之後使用者若自行編輯／清空名冊，就不會再被這裡覆蓋。
+async function ensureDefaultRoster() {
+  if (state.roster.length > 0) return;
+  try {
+    const res = await fetch("data/roster.json");
+    const list = await res.json();
+    state.roster = normalizeRoster(list);
+    saveState(state);
+  } catch (e) {
+    console.warn("載入內建名冊失敗", e);
+  }
+}
 
 // ---------------- 班級名冊 ----------------
 
@@ -637,11 +653,12 @@ function wireSettingsTab() {
     }
   });
 
-  document.getElementById("btnResetAll").addEventListener("click", () => {
+  document.getElementById("btnResetAll").addEventListener("click", async () => {
     if (!confirm("確定要清除所有資料（座位表 + 點名記錄）嗎？此動作無法復原！")) return;
     localStorage.clear();
     state = loadState();
     draftSeating = cloneSeating(state.seating);
+    await ensureDefaultRoster();
     renderSeatEditor();
     renderSettings();
     renderRollcall();
