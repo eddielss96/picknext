@@ -124,7 +124,21 @@ main { max-width: 900px; margin: 0 auto; padding: 0 16px 60px; }
 
 .preview-row img { max-width: 100%; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border); }
 
-.seat-editor-header { display: flex; justify-content: space-between; align-items: center; }
+.seat-editor-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.seat-editor-header-actions { display: flex; gap: 8px; }
+
+.roster-textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.roster-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 
 .session-editor {
   border: 1px dashed var(--border);

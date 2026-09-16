@@ -1,7 +1,8 @@
-import { loadState, saveState, exportStateToFile, importStateFromObject, newSeatId } from "./storage.js";
+import { loadState, saveState, exportStateToFile, importStateFromObject, newSeatId, normalizeRoster } from "./storage.js";
 import { recognizeSeatingImage } from "./ocr.js";
 import { flattenSeats, getRecommendation, pickSuggested } from "./recommend.js";
 import { nameToRubyHtml } from "./zhuyin.js";
+import { applyRosterToSeating, parseRosterText, rosterToText, findClosestRosterEntry } from "./roster.js";
 
 let state = loadState();
 let draftSeating = cloneSeating(state.seating);
@@ -21,11 +22,53 @@ document.addEventListener("DOMContentLoaded", () => {
   wireRollcallTab();
   wireSettingsTab();
   wireOcrEngineStatus();
+  wireRosterUI();
 
   renderSeatEditor();
   renderSettings();
   renderRollcall();
 });
+
+// ---------------- 班級名冊 ----------------
+
+function wireRosterUI() {
+  const textarea = document.getElementById("rosterInput");
+  refreshRosterUI();
+
+  document.getElementById("btnSaveRoster").addEventListener("click", () => {
+    state.roster = normalizeRoster(parseRosterText(textarea.value));
+    saveState(state);
+    refreshRosterUI();
+  });
+
+  document.getElementById("btnApplyRoster").addEventListener("click", () => {
+    if (state.roster.length === 0) {
+      alert("目前還沒有名冊資料，請先在上方輸入班級名冊並儲存。");
+      return;
+    }
+    const report = applyRosterToSeating(draftSeating, state.roster);
+    renderSeatEditor();
+    alert(formatRosterReport(report));
+  });
+}
+
+function refreshRosterUI() {
+  const textarea = document.getElementById("rosterInput");
+  const statusEl = document.getElementById("rosterStatus");
+  textarea.value = rosterToText(state.roster);
+  statusEl.textContent = state.roster.length > 0 ? `目前名冊：${state.roster.length} 人` : "尚未設定名冊";
+}
+
+function formatRosterReport(report) {
+  const lines = [
+    `校正了 ${report.correctedCount} 個姓名拼字`,
+    `補上了 ${report.filledGenderCount} 個性別`,
+  ];
+  if (report.unmatched.length > 0) {
+    lines.push(`⚠️ 有 ${report.unmatched.length} 個名字在名冊中找不到接近的對應，請手動確認：${report.unmatched.join("、")}`);
+  }
+  return lines.join("\n");
+}
 
 function wireOcrEngineStatus() {
   const statusEl = document.getElementById("ocrEngineStatus");
@@ -111,10 +154,16 @@ function wireSetupTab() {
       } else {
         assignSeatIds(result.sessions);
         draftSeating = { sessions: result.sessions };
+
+        let msg = `辨識完成，共偵測到 ${result.wordCount} 個文字區塊。\n請務必逐一檢查姓名是否正確。`;
+        if (state.roster.length > 0) {
+          const report = applyRosterToSeating(draftSeating, state.roster);
+          msg += `\n\n已自動比對班級名冊：${formatRosterReport(report)}`;
+        } else {
+          msg += "\n性別欄位需要手動設定（圖片顏色不會被用來判斷性別），或到上方先建立班級名冊，之後就能自動帶入。";
+        }
         renderSeatEditor();
-        alert(
-          `辨識完成，共偵測到 ${result.wordCount} 個文字區塊。\n請務必逐一檢查姓名是否正確，並手動設定每個人的性別（圖片顏色不會被用來判斷性別）。`
-        );
+        alert(msg);
       }
     } catch (e) {
       console.error(e);
@@ -283,6 +332,20 @@ function renderSeatCellEditor(session, row, seat, cIdx) {
   nameInput.value = seat.name || "";
   nameInput.addEventListener("input", () => {
     seat.name = nameInput.value;
+  });
+  nameInput.addEventListener("blur", () => {
+    // 離開輸入框時，若名冊裡有明確對得上的姓名，自動校正拼字＋補上性別
+    if (state.roster.length === 0 || !seat.name) return;
+    const { entry, ambiguous } = findClosestRosterEntry(seat.name, state.roster);
+    if (!entry || ambiguous) return;
+    if (entry.name !== seat.name) {
+      seat.name = entry.name;
+      nameInput.value = entry.name;
+    }
+    if (!seat.gender && entry.gender) {
+      seat.gender = entry.gender;
+      genderSelect.value = entry.gender;
+    }
   });
   wrap.appendChild(nameInput);
 
@@ -565,6 +628,7 @@ function wireSettingsTab() {
       renderSeatEditor();
       renderSettings();
       renderRollcall();
+      refreshRosterUI();
       alert("匯入成功！");
     } catch (err) {
       alert("匯入失敗：檔案格式不正確");
@@ -581,6 +645,7 @@ function wireSettingsTab() {
     renderSeatEditor();
     renderSettings();
     renderRollcall();
+    refreshRosterUI();
   });
 }
 

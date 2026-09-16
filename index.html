@@ -22,6 +22,19 @@
     <!-- ============ Step 1：座位表設定 ============ -->
     <section id="tab-setup" class="tab-panel active">
       <div class="card">
+        <h2>班級名冊（姓名＋性別，設定一次就好）</h2>
+        <p class="hint">
+          班上成員通常整學期不會變，先把名冊建好，之後每次上傳新照片，OCR 辨識到的姓名會自動比對名冊校正錯字、直接帶入性別，不用每次都手動設一次。
+          每行一位，格式：<code>姓名 性別</code>（性別可省略，例如「林欣學 女」或單純「林欣學」）。
+        </p>
+        <textarea id="rosterInput" class="roster-textarea" rows="6" placeholder="林欣學 女&#10;黃宥程 男&#10;張宇佑 男"></textarea>
+        <div class="roster-actions">
+          <button id="btnSaveRoster" class="btn btn-secondary">儲存名冊</button>
+          <span id="rosterStatus" class="hint"></span>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>上傳座位表圖片</h2>
         <p class="hint">上傳照片後可自動辨識姓名（僅供輔助，辨識率有限，請務必於下方逐一校正）。性別欄位需要手動設定，圖片顏色不會被拿來判斷性別。</p>
         <div class="upload-row">
@@ -42,7 +55,10 @@
       <div class="card">
         <div class="seat-editor-header">
           <h2>座位表校正</h2>
-          <button id="btnAddSession" class="btn btn-secondary btn-small">＋ 新增區塊</button>
+          <div class="seat-editor-header-actions">
+            <button id="btnApplyRoster" class="btn btn-secondary btn-small">📖 套用名冊校正</button>
+            <button id="btnAddSession" class="btn btn-secondary btn-small">＋ 新增區塊</button>
+          </div>
         </div>
         <p class="hint">每一個區塊（Session）代表圖片中一個倒三角形座位區。規則1（不能同區連續點名）就是以這裡的區塊分類為準，請確認分區正確。</p>
         <div id="sessionEditors"></div>

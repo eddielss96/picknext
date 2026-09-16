@@ -11,7 +11,22 @@ function defaultState() {
     me: "林欣學",
     seating: { sessions: [] },
     callLog: [], // { seatId, name, gender, sessionId, ts }
+    roster: [], // { name, gender } 班級固定名冊，用來輔助 OCR 校正姓名與帶入性別
   };
+}
+
+// 確保 roster 是乾淨的 { name, gender } 陣列（去除空白姓名、重複姓名只留最後一筆）
+function normalizeRoster(roster) {
+  if (!Array.isArray(roster)) return [];
+  const byName = new Map();
+  for (const entry of roster) {
+    if (!entry || !entry.name) continue;
+    const name = String(entry.name).trim();
+    if (!name) continue;
+    const gender = entry.gender === "男" || entry.gender === "女" ? entry.gender : "";
+    byName.set(name, { name, gender });
+  }
+  return Array.from(byName.values());
 }
 
 // 確保每個座位（非 null）都有唯一 id、gender 欄位存在
@@ -46,6 +61,7 @@ export function loadState() {
     const state = { ...defaultState(), ...parsed };
     state.seating = normalizeSeating(state.seating);
     if (!Array.isArray(state.callLog)) state.callLog = [];
+    state.roster = normalizeRoster(state.roster);
     return state;
   } catch (e) {
     console.warn("讀取本機資料失敗，改用預設值", e);
@@ -81,6 +97,7 @@ export function importStateFromObject(obj) {
   const state = { ...defaultState(), ...obj };
   state.seating = normalizeSeating(state.seating);
   if (!Array.isArray(state.callLog)) state.callLog = [];
+  state.roster = normalizeRoster(state.roster);
   return state;
 }
 
@@ -88,4 +105,4 @@ export function newSeatId() {
   return uid();
 }
 
-export { normalizeSeating, defaultState };
+export { normalizeSeating, normalizeRoster, defaultState };
