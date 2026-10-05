@@ -73,6 +73,14 @@ function refreshRosterUI() {
   const statusEl = document.getElementById("rosterStatus");
   textarea.value = rosterToText(state.roster);
   statusEl.textContent = state.roster.length > 0 ? `目前名冊：${state.roster.length} 人` : "尚未設定名冊";
+  refreshRosterDatalist();
+}
+
+// 讓座位表校正表格裡的姓名輸入框可以用瀏覽器原生自動完成，直接點選名冊中的人，
+// 不用手動打字也不怕辨識錯字——這樣就算 OCR 效果不好，手動校正也能很快
+function refreshRosterDatalist() {
+  const datalist = document.getElementById("rosterNameList");
+  datalist.innerHTML = state.roster.map((r) => `<option value="${escapeAttr(r.name)}"></option>`).join("");
 }
 
 function formatRosterReport(report) {
@@ -395,6 +403,7 @@ function renderSeatCellEditor(session, row, seat, cIdx) {
   nameInput.type = "text";
   nameInput.className = "seat-name-input";
   nameInput.placeholder = "姓名";
+  nameInput.setAttribute("list", "rosterNameList");
   nameInput.value = seat.name || "";
   nameInput.addEventListener("input", () => {
     seat.name = nameInput.value;

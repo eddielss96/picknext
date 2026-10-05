@@ -2,10 +2,12 @@
 // 依賴全域 window.Tesseract（於 index.html 以 <script> 從 CDN 載入）
 //
 // 演算法：
-// 1. 對整張圖跑 OCR，取得每個「字詞」的文字與外框座標（bbox）。
+// 0. 前處理：把圖片畫到 canvas 上轉灰階＋加強對比，解析度太小時放大，減少座位表格線／色塊底色干擾辨識。
+// 1. 用 Tesseract worker 並指定 PSM 11（sparse text：在圖片中零散找文字，不假設是一整段文章排版），
+//    這是辨識表格／分散文字時比預設模式準確許多的關鍵設定——預設模式常把格線、色塊邊緣誤判成文字而產生亂碼。
 // 2. 依 Y 座標把文字群聚成「列」（row）。
 // 3. 把座位表切成「左/中/右」三個 session（對應圖片中三個倒三角形區塊）：
-//    優先使用呼叫端傳入的 sessionBoundaries（使用者在照片上手動拖曳出來的兩條分隔線，最準）；
+//    優先使用呼叫端傳入的 sessionBoundaries（使用者在照片上手動拖曳出來的兩條分隔線，最準，座標需對應「原始圖片」解析度）；
 //    沒有提供的話才退回用全圖 X 座標找兩個最大間隔的猜測法（每列內容疏密不同時容易切錯，僅供沒校正時的備援）。
 // 4. 同一列、同一 session 內的文字依 X 座標排序，組成該 session 該列的座位序列。
 // 5. 過濾掉非姓名的標籤字樣（TA、門、講台…）與雜訊。
@@ -14,17 +16,29 @@
 
 const NON_NAME_LABELS = new Set(["門", "講台", "台", "黑板", "投影"]);
 const TA_LABELS = new Set(["TA", "T A", "TA助教", "助教"]);
+const MIN_WIDTH_FOR_OCR = 1800; // 原始圖片寬度小於這個值就放大，給 OCR 更多像素可用
 
 export async function recognizeSeatingImage(imageSource, { onProgress, sessionBoundaries } = {}) {
   if (!window.Tesseract) {
     throw new Error("OCR 函式庫尚未載入，請確認網路連線後重新整理頁面");
   }
 
-  const { data } = await window.Tesseract.recognize(imageSource, "chi_tra", {
+  const { dataUrl, scale } = await preprocessImage(imageSource);
+
+  const worker = await window.Tesseract.createWorker("chi_tra", window.Tesseract.OEM.LSTM_ONLY, {
     logger: (m) => {
       if (onProgress) onProgress(m);
     },
   });
+
+  let data;
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: window.Tesseract.PSM.SPARSE_TEXT });
+    const result = await worker.recognize(dataUrl);
+    data = result.data;
+  } finally {
+    await worker.terminate();
+  }
 
   const rawWords = (data.words || [])
     .filter((w) => w.text && w.text.trim().length > 0)
@@ -42,10 +56,16 @@ export async function recognizeSeatingImage(imageSource, { onProgress, sessionBo
     return { sessions: emptySessions(), wordCount: 0 };
   }
 
-  const sessionBounds =
+  // sessionBoundaries 是呼叫端依「原始圖片」解析度算出來的座標，這裡的文字座標是「前處理後（可能放大過）」的圖片座標，
+  // 兩者要用同一個 scale 換算成同一個座標系統，分界才會對得上。
+  const scaledBoundaries =
     Array.isArray(sessionBoundaries) && sessionBoundaries.length === 2
-      ? [...sessionBoundaries].sort((a, b) => a - b)
-      : splitIntoThreeGroupsByX(rawWords.map((w) => w.cx));
+      ? sessionBoundaries.map((b) => b * scale)
+      : null;
+
+  const sessionBounds = scaledBoundaries
+    ? [...scaledBoundaries].sort((a, b) => a - b)
+    : splitIntoThreeGroupsByX(rawWords.map((w) => w.cx));
   const rows = clusterIntoRows(rawWords);
 
   const sessions = [
@@ -68,6 +88,40 @@ export async function recognizeSeatingImage(imageSource, { onProgress, sessionBo
   }
 
   return { sessions, wordCount: rawWords.length };
+}
+
+// 把圖片讀成 <img> 元素，拿到它的原始像素尺寸
+function loadImageElement(source) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    let objectUrl = null;
+    if (typeof source === "string") {
+      img.src = source;
+    } else {
+      objectUrl = URL.createObjectURL(source);
+      img.src = objectUrl;
+    }
+    img.onload = () => resolve({ img, objectUrl });
+    img.onerror = () => reject(new Error("圖片讀取失敗"));
+  });
+}
+
+// 前處理：灰階＋加強對比（減少座位表底色色塊干擾），解析度太小時放大（給小字更多像素可辨識）
+// 回傳 { dataUrl, scale }，scale 是「前處理後尺寸 / 原始尺寸」，呼叫端要用它把其他座標系統（例如使用者手動設定的分隔線）換算過來
+async function preprocessImage(source) {
+  const { img, objectUrl } = await loadImageElement(source);
+  try {
+    const scale = img.naturalWidth < MIN_WIDTH_FOR_OCR ? MIN_WIDTH_FOR_OCR / img.naturalWidth : 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.filter = "grayscale(1) contrast(1.4)";
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { dataUrl: canvas.toDataURL("image/png"), scale };
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function wordToSeat(w) {
