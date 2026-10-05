@@ -6,11 +6,14 @@
 // 1. 用 Tesseract worker 並指定 PSM 11（sparse text：在圖片中零散找文字，不假設是一整段文章排版），
 //    這是辨識表格／分散文字時比預設模式準確許多的關鍵設定——預設模式常把格線、色塊邊緣誤判成文字而產生亂碼。
 // 2. 依 Y 座標把文字群聚成「列」（row）。
-// 3. 把座位表切成「左/中/右」三個 session（對應圖片中三個倒三角形區塊）：
+// 3. 中文沒有空格分隔，Tesseract 判斷「詞」邊界常常不穩：同一張圖裡，有時候會把一個人的姓名正確合成一個詞，
+//    有時候又會拆成一個一個單字。所以在同一列內，把彼此「字距很近」（小於一個字寬的門檻）的字重新合併回同一個姓名，
+//    字距夠大才當作換到下一個人——這樣不管 Tesseract 原始輸出是合併還是拆開，重組後都會是正確的姓名。
+// 4. 把座位表切成「左/中/右」三個 session（對應圖片中三個倒三角形區塊）：
 //    優先使用呼叫端傳入的 sessionBoundaries（使用者在照片上手動拖曳出來的兩條分隔線，最準，座標需對應「原始圖片」解析度）；
 //    沒有提供的話才退回用全圖 X 座標找兩個最大間隔的猜測法（每列內容疏密不同時容易切錯，僅供沒校正時的備援）。
-// 4. 同一列、同一 session 內的文字依 X 座標排序，組成該 session 該列的座位序列。
-// 5. 過濾掉非姓名的標籤字樣（TA、門、講台…）與雜訊。
+// 5. 同一列、同一 session 內的文字依 X 座標排序，組成該 session 該列的座位序列。
+// 6. 過濾掉非姓名的標籤字樣（TA、門、講台…）與雜訊。
 //
 // 這只是「輔助帶入」，實際辨識率會隨照片畫質、字體浮動，之後一定要在手動校正表格中逐一確認。
 
@@ -45,6 +48,8 @@ export async function recognizeSeatingImage(imageSource, { onProgress, sessionBo
     .map((w) => ({
       text: w.text.trim(),
       confidence: w.confidence,
+      x0: w.bbox.x0,
+      x1: w.bbox.x1,
       cx: (w.bbox.x0 + w.bbox.x1) / 2,
       cy: (w.bbox.y0 + w.bbox.y1) / 2,
       w: w.bbox.x1 - w.bbox.x0,
@@ -66,7 +71,8 @@ export async function recognizeSeatingImage(imageSource, { onProgress, sessionBo
   const sessionBounds = scaledBoundaries
     ? [...scaledBoundaries].sort((a, b) => a - b)
     : splitIntoThreeGroupsByX(rawWords.map((w) => w.cx));
-  const rows = clusterIntoRows(rawWords);
+  const rows = clusterIntoRows(rawWords).map(mergeAdjacentCharacters);
+  const mergedWordCount = rows.reduce((sum, row) => sum + row.length, 0);
 
   const sessions = [
     { id: "left", label: "左側", rows: [] },
@@ -87,7 +93,7 @@ export async function recognizeSeatingImage(imageSource, { onProgress, sessionBo
     }
   }
 
-  return { sessions, wordCount: rawWords.length };
+  return { sessions, wordCount: mergedWordCount };
 }
 
 // 把圖片讀成 <img> 元素，拿到它的原始像素尺寸
@@ -189,4 +195,48 @@ function clusterIntoRows(words) {
   }
   if (current.length) rows.push(current);
   return rows;
+}
+
+const CJK_ONLY = /^[一-鿿]+$/;
+const MAX_MERGED_NAME_LEN = 5;
+
+// 同一列內，把字距很近的中文字重新合併成同一個姓名（Tesseract 對中文詞邊界的判斷不穩定，
+// 同一張圖裡常常有的姓名合併對了、有的卻被拆成一個個單字）。
+// 門檻：用這一列裡「每個字大約多寬」的中位數（純中文詞的寬度 / 字數）來判斷，
+// 字距小於這個寬度的 0.6 倍視為同一個人，否則視為換到下一個人。
+function mergeAdjacentCharacters(rowWords) {
+  if (rowWords.length === 0) return [];
+  const sorted = [...rowWords].sort((a, b) => a.x0 - b.x0);
+
+  const perCharWidths = sorted.filter((w) => CJK_ONLY.test(w.text)).map((w) => w.w / w.text.length);
+  perCharWidths.sort((a, b) => a - b);
+  const avgWidth = sorted.reduce((s, w) => s + w.w, 0) / sorted.length || 20;
+  const refCharWidth = perCharWidths.length ? perCharWidths[Math.floor(perCharWidths.length / 2)] : avgWidth;
+  const gapThreshold = refCharWidth * 0.6;
+
+  const merged = [];
+  let current = null;
+
+  for (const w of sorted) {
+    const isChineseWord = CJK_ONLY.test(w.text);
+    const canMergeWithPrev =
+      current &&
+      isChineseWord &&
+      CJK_ONLY.test(current.text) &&
+      current.text.length < MAX_MERGED_NAME_LEN &&
+      w.x0 - current.x1 < gapThreshold;
+
+    if (canMergeWithPrev) {
+      current.text += w.text;
+      current.x1 = w.x1;
+      current.cx = (current.x0 + current.x1) / 2;
+      current.w = current.x1 - current.x0;
+      current.h = Math.max(current.h, w.h);
+      current.confidence = Math.min(current.confidence, w.confidence);
+    } else {
+      current = { ...w };
+      merged.push(current);
+    }
+  }
+  return merged;
 }
