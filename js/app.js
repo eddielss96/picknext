@@ -137,15 +137,30 @@ function wireSetupTab() {
   const btnLoadSample = document.getElementById("btnLoadSample");
   const btnSaveSeating = document.getElementById("btnSaveSeating");
   const preview = document.getElementById("imagePreview");
+  const previewWrap = document.getElementById("previewWrap");
+  const dividerHint = document.getElementById("dividerHint");
+  const line1 = document.getElementById("dividerLine1");
+  const line2 = document.getElementById("dividerLine2");
+
+  wireDividerDrag(line1, previewWrap);
+  wireDividerDrag(line2, previewWrap);
 
   imageInput.addEventListener("change", () => {
     const file = imageInput.files && imageInput.files[0];
     selectedImageFile = file || null;
     if (file) {
       preview.src = URL.createObjectURL(file);
-      preview.hidden = false;
+      previewWrap.hidden = false;
+      dividerHint.hidden = false;
+      preview.onload = () => {
+        // 預設分隔線放在三等分位置，使用者再自行拖曳對齊
+        const w = previewWrap.clientWidth;
+        line1.style.left = Math.round(w / 3) + "px";
+        line2.style.left = Math.round((w * 2) / 3) + "px";
+      };
     } else {
-      preview.hidden = true;
+      previewWrap.hidden = true;
+      dividerHint.hidden = true;
     }
     // 按鈕的 disabled 狀態統一由 wireOcrEngineStatus() 的 updateOcrButtonState 控制
   });
@@ -158,7 +173,9 @@ function wireSetupTab() {
     progressWrap.hidden = false;
     btnRecognize.disabled = true;
     try {
+      const sessionBoundaries = getDividerBoundariesInImagePixels(preview, previewWrap, line1, line2);
       const result = await recognizeSeatingImage(selectedImageFile, {
+        sessionBoundaries,
         onProgress: (m) => {
           const pct = Math.round((m.progress || 0) * 100);
           progressFill.style.width = pct + "%";
@@ -216,6 +233,39 @@ function wireSetupTab() {
     renderRollcall();
     document.querySelector('.tab-btn[data-tab="rollcall"]').click();
   });
+}
+
+// 讓分隔線可以用滑鼠／觸控拖曳，限制在預覽圖片的寬度範圍內
+function wireDividerDrag(lineEl, wrap) {
+  let dragging = false;
+
+  lineEl.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    lineEl.setPointerCapture(e.pointerId);
+  });
+  lineEl.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
+    lineEl.style.left = x + "px";
+  });
+  const stopDrag = () => {
+    dragging = false;
+  };
+  lineEl.addEventListener("pointerup", stopDrag);
+  lineEl.addEventListener("pointercancel", stopDrag);
+}
+
+// 把兩條分隔線在「預覽圖（顯示大小）」上的位置，換算成「原始圖片像素座標」
+// 因為 Tesseract 辨識出來的文字座標是以原始圖片解析度為準，預覽圖通常會被瀏覽器縮放顯示
+function getDividerBoundariesInImagePixels(imgEl, wrap, line1, line2) {
+  const displayedWidth = wrap.clientWidth;
+  const naturalWidth = imgEl.naturalWidth;
+  if (!displayedWidth || !naturalWidth) return null;
+  const scale = naturalWidth / displayedWidth;
+  const x1 = parseFloat(line1.style.left || "0") * scale;
+  const x2 = parseFloat(line2.style.left || "0") * scale;
+  return [x1, x2];
 }
 
 function translateOcrStatus(status) {

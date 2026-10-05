@@ -47,8 +47,15 @@
           <div class="progress-bar"><div id="ocrProgressFill" class="progress-fill"></div></div>
           <span id="ocrProgressText"></span>
         </div>
+        <p id="dividerHint" class="hint" hidden>
+          👉 拖曳下面兩條藍線，對齊照片中「左／中／右」三個座位區塊之間的分界，可以大幅提升辨識準確度。
+        </p>
         <div class="preview-row">
-          <img id="imagePreview" hidden alt="座位表預覽" />
+          <div id="previewWrap" class="preview-wrap" hidden>
+            <img id="imagePreview" alt="座位表預覽" />
+            <div id="dividerLine1" class="divider-line"></div>
+            <div id="dividerLine2" class="divider-line"></div>
+          </div>
         </div>
       </div>
 

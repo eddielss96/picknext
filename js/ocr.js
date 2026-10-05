@@ -4,7 +4,9 @@
 // 演算法：
 // 1. 對整張圖跑 OCR，取得每個「字詞」的文字與外框座標（bbox）。
 // 2. 依 Y 座標把文字群聚成「列」（row）。
-// 3. 依全圖 X 座標找出兩個最大間隔，把座位表切成「左/中/右」三個 session（對應圖片中三個倒三角形區塊）。
+// 3. 把座位表切成「左/中/右」三個 session（對應圖片中三個倒三角形區塊）：
+//    優先使用呼叫端傳入的 sessionBoundaries（使用者在照片上手動拖曳出來的兩條分隔線，最準）；
+//    沒有提供的話才退回用全圖 X 座標找兩個最大間隔的猜測法（每列內容疏密不同時容易切錯，僅供沒校正時的備援）。
 // 4. 同一列、同一 session 內的文字依 X 座標排序，組成該 session 該列的座位序列。
 // 5. 過濾掉非姓名的標籤字樣（TA、門、講台…）與雜訊。
 //
@@ -13,7 +15,7 @@
 const NON_NAME_LABELS = new Set(["門", "講台", "台", "黑板", "投影"]);
 const TA_LABELS = new Set(["TA", "T A", "TA助教", "助教"]);
 
-export async function recognizeSeatingImage(imageSource, { onProgress } = {}) {
+export async function recognizeSeatingImage(imageSource, { onProgress, sessionBoundaries } = {}) {
   if (!window.Tesseract) {
     throw new Error("OCR 函式庫尚未載入，請確認網路連線後重新整理頁面");
   }
@@ -40,7 +42,10 @@ export async function recognizeSeatingImage(imageSource, { onProgress } = {}) {
     return { sessions: emptySessions(), wordCount: 0 };
   }
 
-  const sessionBounds = splitIntoThreeGroupsByX(rawWords.map((w) => w.cx));
+  const sessionBounds =
+    Array.isArray(sessionBoundaries) && sessionBoundaries.length === 2
+      ? [...sessionBoundaries].sort((a, b) => a - b)
+      : splitIntoThreeGroupsByX(rawWords.map((w) => w.cx));
   const rows = clusterIntoRows(rawWords);
 
   const sessions = [
