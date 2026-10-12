@@ -200,19 +200,42 @@ function clusterIntoRows(words) {
 const CJK_ONLY = /^[一-鿿]+$/;
 const MAX_MERGED_NAME_LEN = 5;
 
+// Tesseract 有時候會對同一個字重複偵測：除了正確辨識出完整姓名（例如「黃獻儀」），
+// 還會額外多偵測出一個水平範圍幾乎被完整姓名「包住」、文字又是其子字串的短字（例如單獨的「黃」）。
+// 這種重疊/包含關係幾乎可以確定是重複的雜訊偵測，而不是姓名真的被拆開（真正被拆開的字之間是「相鄰但不重疊」），
+// 所以直接濾掉，不要讓它變成多餘的座位。
+function dedupeContainedFragments(sortedWords) {
+  return sortedWords.filter((w, i) => {
+    const isShortCjk = CJK_ONLY.test(w.text) && w.text.length <= 2;
+    if (!isShortCjk) return true;
+
+    const isContainedDuplicateOf = (other) => {
+      if (!other || !CJK_ONLY.test(other.text) || other.text.length <= w.text.length) return false;
+      const overlapStart = Math.max(w.x0, other.x0);
+      const overlapEnd = Math.min(w.x1, other.x1);
+      const overlapLen = Math.max(0, overlapEnd - overlapStart);
+      const containedRatio = overlapLen / (w.x1 - w.x0 || 1);
+      return containedRatio > 0.5 && other.text.includes(w.text);
+    };
+
+    return !isContainedDuplicateOf(sortedWords[i - 1]) && !isContainedDuplicateOf(sortedWords[i + 1]);
+  });
+}
+
 // 同一列內，把字距很近的中文字重新合併成同一個姓名（Tesseract 對中文詞邊界的判斷不穩定，
 // 同一張圖裡常常有的姓名合併對了、有的卻被拆成一個個單字）。
 // 門檻：用這一列裡「每個字大約多寬」的中位數（純中文詞的寬度 / 字數）來判斷，
-// 字距小於這個寬度的 0.6 倍視為同一個人，否則視為換到下一個人。
+// 字距小於這個寬度的 0.9 倍視為同一個人，否則視為換到下一個人
+// （真實照片裡不同人之間的格子間距通常明顯大於一個字寬，所以這個門檻還算安全）。
 function mergeAdjacentCharacters(rowWords) {
   if (rowWords.length === 0) return [];
-  const sorted = [...rowWords].sort((a, b) => a.x0 - b.x0);
+  const sorted = dedupeContainedFragments([...rowWords].sort((a, b) => a.x0 - b.x0));
 
   const perCharWidths = sorted.filter((w) => CJK_ONLY.test(w.text)).map((w) => w.w / w.text.length);
   perCharWidths.sort((a, b) => a - b);
   const avgWidth = sorted.reduce((s, w) => s + w.w, 0) / sorted.length || 20;
   const refCharWidth = perCharWidths.length ? perCharWidths[Math.floor(perCharWidths.length / 2)] : avgWidth;
-  const gapThreshold = refCharWidth * 0.6;
+  const gapThreshold = refCharWidth * 0.9;
 
   const merged = [];
   let current = null;
