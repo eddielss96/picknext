@@ -55,6 +55,7 @@ function wireRosterUI() {
     state.roster = normalizeRoster(parseRosterText(textarea.value));
     saveState(state);
     refreshRosterUI();
+    renderSettings();
   });
 
   document.getElementById("btnApplyRoster").addEventListener("click", () => {
@@ -680,7 +681,7 @@ function escapeHtml(s) {
 
 function wireSettingsTab() {
   const meInput = document.getElementById("meNameInput");
-  meInput.addEventListener("input", () => {
+  meInput.addEventListener("change", () => {
     state.me = meInput.value;
     saveState(state);
     document.getElementById("meNameDisplay").textContent = state.me || "（尚未設定）";
@@ -726,5 +727,14 @@ function wireSettingsTab() {
 }
 
 function renderSettings() {
-  document.getElementById("meNameInput").value = state.me || "";
+  const meSelect = document.getElementById("meNameInput");
+  const names = state.roster.map((r) => r.name);
+  // 如果目前的「我」不在名冊裡（例如名冊換過、或手動設過一個不在名冊的名字），
+  // 還是要讓它出現在清單裡，不然切換名冊時會悄悄把使用者原本的選擇換掉
+  if (state.me && !names.includes(state.me)) names.unshift(state.me);
+
+  meSelect.innerHTML =
+    `<option value="">（尚未設定）</option>` +
+    names.map((n) => `<option value="${escapeAttr(n)}">${escapeAttr(n)}</option>`).join("");
+  meSelect.value = state.me || "";
 }
